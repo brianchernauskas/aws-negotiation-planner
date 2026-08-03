@@ -156,6 +156,27 @@ const SPEND_TIERS = {
   '50mplus':   { label: '$50M+', min: 50000000, max: Infinity, tier: 8 },
 };
 
+// Maps AWS planner spend keys to deal-calibration tier keys
+const AWS_TO_CAL_TIER = {
+  'under100k': 'under1m', '100k-500k': 'under1m', '500k-1m': 'under1m',
+  '1m-2m': '1m-5m', '2m-5m': '1m-5m',
+  '5m-10m': '5m-10m', '10m-25m': '10m-25m',
+  '25m-50m': '25m-50m', '50mplus': '50m-100m',
+};
+
+function getProximaInsight(provider, calTier) {
+  try {
+    const deals = JSON.parse(localStorage.getItem('proxima-deals') || '[]');
+    const provDeals = deals.filter(d => d.provider === provider);
+    if (provDeals.length === 0) return null;
+    const tierDeals = calTier ? provDeals.filter(d => d.tier === calTier) : [];
+    const relevant = tierDeals.length >= 2 ? tierDeals : provDeals;
+    const discounts = relevant.map(d => d.discount).sort((a, b) => a - b);
+    const avg = Math.round(discounts.reduce((s, v) => s + v, 0) / discounts.length * 10) / 10;
+    return { count: relevant.length, totalCount: provDeals.length, avg, lo: discounts[0], hi: discounts[discounts.length - 1], tierMatch: tierDeals.length >= 2 };
+  } catch { return null; }
+}
+
 function getDiscountRange(s) {
   const tier = SPEND_TIERS[s.annualSpend]?.tier ?? 0;
   const multicloudBoost = s.multicloud === 'multi-cloud' ? 8 : s.multicloud === 'evaluating' ? 5 : s.multicloud === 'aws-primary' ? 2 : 0;
@@ -230,6 +251,7 @@ function buildStrategyHTML(s) {
   const companyLabels = { startup: 'Startup', smb: 'SMB', midmarket: 'Mid-Market', enterprise: 'Enterprise' };
 
   const tactics = buildTactics(s, tier);
+  const proxima = getProximaInsight('aws', AWS_TO_CAL_TIER[s.annualSpend]);
   const timeline = buildTimeline(s);
   const concessions = buildConcessions(s, tier);
   const risks = buildRisks(s, tier);
@@ -296,6 +318,10 @@ function buildStrategyHTML(s) {
             <div class="de-note">Midpoint target: <strong>${discount.midpoint}%</strong> · Walk-away floor: <strong>${discount.lo}%</strong> · Stretch goal: <strong>${discount.hi}%</strong></div>
           </div>
         </div>
+        ${proxima ? `<div style="margin-top:10px;padding:10px 14px;background:rgba(255,153,0,.08);border:1px solid rgba(255,153,0,.25);border-radius:8px;font-size:.82rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-weight:700;color:#ff9900;">📊 Proxima Deal Data</span>
+          <span style="color:var(--text-muted);">Based on <strong>${proxima.count} AWS deal${proxima.count !== 1 ? 's' : ''}</strong>${proxima.tierMatch ? ' at this spend tier' : ' across all tiers'}: observed avg <strong>${proxima.avg}%</strong>, range <strong>${proxima.lo}–${proxima.hi}%</strong></span>
+        </div>` : ''}
         ${discountBreakdownHTML(s, tier, discount)}
       </div>
     </div>
