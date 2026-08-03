@@ -139,6 +139,10 @@ function generateStrategy() {
   goToStep(5);
 }
 
+// ─── Ranges metadata ──────────────────────────────────────────────────────────
+const RANGES_LAST_UPDATED = 'August 3, 2026';
+const RANGES_VERSION = '2.1';
+
 // ─── Spend Tier Logic ─────────────────────────────────────────────────────────
 const SPEND_TIERS = {
   'under100k': { label: '<$100K', min: 0, max: 100000, tier: 0 },
@@ -243,6 +247,7 @@ function buildStrategyHTML(s) {
     <h2>Your AWS Negotiation Strategy</h2>
     <div class="subtitle">${companyLabels[s.companySize] || 'Company'} · ${spendLabel} annual spend · Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
     <div style="font-size:.75rem;color:rgba(255,255,255,.6);font-style:italic;margin-top:4px;">Intended for Proxima use only — please contact Brian Chernauskas with questions</div>
+    <div style="font-size:.7rem;color:rgba(255,255,255,.35);margin-top:3px;">Discount ranges last calibrated: ${RANGES_LAST_UPDATED}</div>
     <div class="score-row">
       <div class="score-pill">
         <span class="pill-label">Leverage Score</span>
