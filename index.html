@@ -229,6 +229,28 @@
             </select>
           </div>
           <div class="form-group">
+            <label for="database-savings-plans">AWS Database Services in Use (Savings Plans eligibility)</label>
+            <select id="database-savings-plans">
+              <option value="">Select…</option>
+              <option value="none">None / not using eligible database services</option>
+              <option value="aurora">Amazon Aurora / Aurora Serverless</option>
+              <option value="documentdb">DocumentDB</option>
+              <option value="neptune">Neptune</option>
+              <option value="multiple">Multiple eligible services</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edp-months-remaining">Months Until EDP Expiry</label>
+            <select id="edp-months-remaining">
+              <option value="">Select…</option>
+              <option value="na">No EDP / not applicable</option>
+              <option value="under3">Under 3 months (critical)</option>
+              <option value="3-6">3–6 months (limited leverage)</option>
+              <option value="6-12">6–12 months (good window)</option>
+              <option value="12plus">12+ months (strong position)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label for="commit-utilization">Historical Commit Utilization (if applicable)</label>
             <select id="commit-utilization">
               <option value="">Select utilization…</option>

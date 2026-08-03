@@ -93,6 +93,8 @@ function collectStep(step) {
     state.renewalTimeline = document.getElementById('renewal-timeline').value;
     state.desiredTerm = document.getElementById('desired-term').value;
     state.marketplaceSpend = document.getElementById('marketplace-spend')?.value || 'none';
+    state.databaseSavingsPlans = document.getElementById('database-savings-plans')?.value || 'none';
+    state.edpMonthsRemaining = document.getElementById('edp-months-remaining')?.value || 'na';
     state.commitUtilization = document.getElementById('commit-utilization').value;
     state.currentDiscounts = [...document.querySelectorAll('.current-discounts:checked')].map(i => i.value);
     state.supportTier = document.getElementById('support-tier').value;
@@ -197,6 +199,12 @@ function getLeverageScore(s) {
   // Marketplace spend — now counts toward EDP drawdown
   if (s.marketplaceSpend === '500kplus') score += 6;
   else if (s.marketplaceSpend === '100k-500k') score += 3;
+  // Database Savings Plans — uncaptured discount lever
+  if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') score += 4;
+  if (s.databaseSavingsPlans === 'multiple') score += 2;
+  // EDP timing — penalize urgency
+  const edpTimingMap = { 'under3': -12, '3-6': -5, '6-12': 6, '12plus': 10, 'na': 0 };
+  score += edpTimingMap[s.edpMonthsRemaining] ?? 0;
   return Math.min(Math.round(score), 100);
 }
 
@@ -422,6 +430,20 @@ function buildTactics(s, tier) {
   const tactics = [];
 
   // Marketplace as EDP currency
+  if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') {
+    tactics.push({
+      title: 'Negotiate Database Savings Plans as a Separate Workstream',
+      desc: `AWS Database Savings Plans (launched Dec 2025) cover Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream at 12–35% discounts on 1-year no-upfront terms. These are almost never included in AWS\'s initial EDP proposal. Raise them proactively as a separate negotiation item and request they be bundled into your EDP credit package or offered as standalone Plans — either way, this adds material value at no additional commit.`,
+      impact: 'high',
+    });
+  }
+  if (s.edpMonthsRemaining === 'under3' || s.edpMonthsRemaining === '3-6') {
+    tactics.push({
+      title: 'Request a Short-Term Extension to Reset the Clock',
+      desc: 'With limited time remaining on your EDP, your first action should be requesting a 60–90 day extension of current terms — not signing a new agreement under deadline pressure. AWS will generally grant this, and it shifts the power dynamic back toward you. A negotiation with 6 months of runway achieves meaningfully better outcomes than one with 6 weeks.',
+      impact: 'high',
+    });
+  }
   if (s.marketplaceSpend === '500kplus' || s.marketplaceSpend === '100k-500k') {
     tactics.push({
       title: 'Include AWS Marketplace Spend in Your EDP Commitment',
@@ -904,6 +926,14 @@ function buildAlerts(s, tier) {
       icon: 'ℹ️',
       text: '<strong>EDP Threshold:</strong> Standard EDP eligibility starts at $1M annual spend. At your current level, focus on Compute Savings Plans and Reserved Instances. However, if you have strong growth projections, AWS may offer an EDP based on committed future spend — especially if you\'re entering a high-growth phase.',
     });
+  }
+  if (s.edpMonthsRemaining === 'under3') {
+    alerts.push({ type: 'danger', icon: '🚨', text: '<strong>EDP Expiring in Under 3 Months.</strong> You are in the weakest possible negotiating position — AWS knows you must renew. Immediately request a short-term 90-day extension at current rates while negotiating the new EDP. Do not let the contract lapse; AWS will reset pricing to on-demand rates.' });
+  } else if (s.edpMonthsRemaining === '3-6') {
+    alerts.push({ type: 'warning', icon: '⚠️', text: '<strong>Limited EDP Negotiation Window.</strong> With 3–6 months remaining, your leverage window is narrowing. Begin formal EDP discussions now. AWS\'s first offer at this stage tends to be below what is achievable with a 9-month runway — push back on the first proposal.' });
+  }
+  if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') {
+    alerts.push({ type: 'success', icon: '🟢', text: '<strong>Database Savings Plans Opportunity Detected.</strong> AWS launched Database Savings Plans in December 2025 — 12–35% discounts on Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream on 1-year no-upfront terms. These are almost never included in AWS\'s EDP proposal. Raise this as a separate workstream in your negotiation and request they be included in your EDP credit package.' });
   }
 
   if (s.contractType === 'on-demand' && tier >= 2) {
