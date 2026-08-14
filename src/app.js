@@ -444,6 +444,7 @@ function discountBreakdownHTML(s, tier, discount) {
   if (s.awsTenure === '5plus') rows.push(['Long-tenured customer (loyalty)', '+0–2%', 'green']);
   if (s.marketplaceSpend === '500kplus') rows.push(['Significant Marketplace spend — counts toward EDP drawdown', '+2–4%', 'green']);
   else if (s.marketplaceSpend === '100k-500k') rows.push(['Marketplace spend — can be included in EDP commitment', '+1–2%', 'green']);
+  if (tier <= 4) rows.push(['Reseller channel discount available (APN partners)', '+5–15%', 'green']);
   if (!rows.length) return '';
   return `<table style="width:100%;margin-top:16px;border-collapse:collapse;font-size:.82rem;">
     <thead><tr style="border-bottom:1px solid var(--border);">
@@ -615,6 +616,15 @@ function buildTactics(s, tier) {
       title: 'Negotiate Bedrock / SageMaker Credits for AI Workloads',
       desc: 'AI/ML is AWS\'s fastest-growing segment and they actively subsidize adoption. Request dedicated Bedrock and SageMaker credits as part of your EDP — especially if you\'re evaluating or expanding AI use cases. AWS will often provide $50K–$250K in service-specific credits to lock in AI workloads vs. Azure OpenAI or GCP Vertex.',
       impact: 'medium',
+    });
+  }
+
+  // Reseller channel discount — only available under $5M
+  if (tier <= 4) {
+    tactics.push({
+      title: 'Explore AWS Reseller Channel for Additional Discount Layer',
+      desc: 'AWS resellers (APN partners such as CDW, SHI, TD SYNNEX, Carahsoft, and specialist cloud partners) hold their own volume discount agreements with AWS and can pass a portion of that margin to customers as an incremental discount — typically 5–15% on top of standard AWS pricing. Critically, this discount layer is only available through the channel and cannot be unlocked by going direct to AWS. At your spend level (under $5M), a qualified reseller may deliver better net pricing than an EDP alone. Evaluate reseller quotes in parallel with direct AWS negotiations before committing to either route.',
+      impact: 'high',
     });
   }
 
@@ -956,6 +966,14 @@ function buildAlerts(s, tier) {
       type: 'info',
       icon: 'ℹ️',
       text: '<strong>EDP Threshold:</strong> Standard EDP eligibility starts at $1M annual spend. At your current level, focus on Compute Savings Plans and Reserved Instances. However, if you have strong growth projections, AWS may offer an EDP based on committed future spend — especially if you\'re entering a high-growth phase.',
+    });
+  }
+
+  if (tier <= 4) {
+    alerts.push({
+      type: 'success',
+      icon: '🟢',
+      text: '<strong>Reseller Channel Discount Available at Your Spend Level.</strong> At spend under $5M/year, AWS resellers (APN channel partners such as CDW, SHI, TD SYNNEX, and specialist cloud resellers) can unlock incremental discounts — typically 5–15% — that AWS does not offer on direct deals of this size. This discount layer exists because resellers carry their own volume agreements with AWS and pass margin through to the customer. Above $5M, direct EDP terms typically outpace channel pricing. Before committing to a direct renewal, obtain at least one competing reseller quote to benchmark net pricing.',
     });
   }
   if (s.edpMonthsRemaining === 'under3') {
