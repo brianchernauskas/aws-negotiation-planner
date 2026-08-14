@@ -584,8 +584,11 @@ select:focus, input[type="text"]:focus {
 /* ── Print ── */
 @media print {
   .app-header, .step-nav, .step-actions, .app-footer { display: none !important; }
-  .step-panel { display: block !important; }
-  #step-1, #step-2, #step-3, #step-4 { display: none !important; }
+  /* Print whatever panel is on screen. Do NOT hard-code step ids here — the
+     output panel's number changes when steps are added or removed, and an id
+     list silently prints a blank page when it drifts. */
+  .step-panel { display: none !important; }
+  .step-panel.active { display: block !important; }
   body { background: #fff; }
   .strategy-hero { background: var(--aws-dark) !important; -webkit-print-color-adjust: exact; }
   .print-proxima-header { display: flex !important; }
