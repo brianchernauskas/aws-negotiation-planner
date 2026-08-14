@@ -368,25 +368,14 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="regions">Number of AWS Regions Used</label>
-              <select id="regions">
+              <label for="spend-concentration">Top Service Spend Concentration</label>
+              <select id="spend-concentration">
                 <option value="">Select…</option>
-                <option value="1">1 region</option>
-                <option value="2-3">2–3 regions</option>
-                <option value="4-6">4–6 regions</option>
-                <option value="7plus">7+ regions (global)</option>
+                <option value="concentrated">Highly concentrated (1–2 services = &gt;80% of spend)</option>
+                <option value="moderate">Moderately spread (3–5 services)</option>
+                <option value="diverse">Diversified (many services, &lt;30% each)</option>
               </select>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label for="spend-concentration">Top Service Spend Concentration</label>
-            <select id="spend-concentration">
-              <option value="">Select…</option>
-              <option value="concentrated">Highly concentrated (1–2 services = &gt;80% of spend)</option>
-              <option value="moderate">Moderately spread (3–5 services)</option>
-              <option value="diverse">Diversified (many services, &lt;30% each)</option>
-            </select>
           </div>
 
           <div class="form-group">
@@ -440,29 +429,16 @@
             </div>
           </div>
 
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="relationship-quality">AWS Account Team Relationship</label>
-              <select id="relationship-quality">
-                <option value="">Select…</option>
-                <option value="none">No dedicated rep (too small)</option>
-                <option value="poor">Weak / transactional relationship</option>
-                <option value="moderate">Moderate — occasional contact</option>
-                <option value="strong">Strong — regular cadence with AE/SA</option>
-                <option value="strategic">Strategic — TAM + executive sponsorship</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="previous-negotiation">Previous Negotiation Experience</label>
-              <select id="previous-negotiation">
-                <option value="">Select…</option>
-                <option value="none">Never negotiated before</option>
-                <option value="basic">Basic negotiation (minor credits/terms)</option>
-                <option value="moderate">Moderate (negotiated some discounts)</option>
-                <option value="experienced">Experienced (full EDP negotiation)</option>
-                <option value="expert">Expert (multiple EDP cycles)</option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label for="relationship-quality">AWS Account Team Relationship</label>
+            <select id="relationship-quality">
+              <option value="">Select…</option>
+              <option value="none">No dedicated rep (too small)</option>
+              <option value="poor">Weak / transactional relationship</option>
+              <option value="moderate">Moderate — occasional contact</option>
+              <option value="strong">Strong — regular cadence with AE/SA</option>
+              <option value="strategic">Strategic — TAM + executive sponsorship</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -475,30 +451,6 @@
               <label class="checkbox-item"><input type="checkbox" value="onprem-exit" /> Exiting on-premises data centers</label>
               <label class="checkbox-item"><input type="checkbox" value="hybrid-cloud" /> Maintaining hybrid cloud long-term</label>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label for="negotiation-goals">Primary Negotiation Goal</label>
-            <select id="negotiation-goals">
-              <option value="">Select primary goal…</option>
-              <option value="max-discount">Maximize headline discount rate</option>
-              <option value="flexibility">Maximize flexibility (avoid over-commitment)</option>
-              <option value="credits">Maximize credits & funded programs</option>
-              <option value="support">Reduce support costs</option>
-              <option value="balanced">Balanced — discount + flexibility + credits</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="internal-champion">Internal AWS Champion / Decision Maker</label>
-            <select id="internal-champion">
-              <option value="">Select…</option>
-              <option value="cto">CTO / VP Engineering</option>
-              <option value="cfo">CFO / Finance team</option>
-              <option value="procurement">Procurement / Vendor Management</option>
-              <option value="finops">FinOps / Cloud team</option>
-              <option value="no-champion">No clear champion yet</option>
-            </select>
           </div>
 
           <div class="form-group">

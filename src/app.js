@@ -30,8 +30,8 @@ function validateStep(step) {
   const required = {
     1: ['company-size', 'industry', 'growth-rate', 'aws-tenure', 'contract-type'],
     2: ['annual-spend', 'spend-growth', 'renewal-timeline'],
-    3: ['workload-type', 'regions', 'optimization-status'],
-    4: ['multicloud', 'relationship-quality', 'negotiation-goals'],
+    3: ['workload-type', 'spend-concentration', 'optimization-status'],
+    4: ['multicloud', 'relationship-quality'],
   };
   const fields = required[step] || [];
   let ok = true;
@@ -102,17 +102,13 @@ function collectStep(step) {
   if (step === 3) {
     state.useCases = [...document.querySelectorAll('#use-cases .selected')].map(c => c.dataset.value);
     state.workloadType = document.getElementById('workload-type').value;
-    state.regions = document.getElementById('regions').value;
     state.spendConcentration = document.getElementById('spend-concentration').value;
     state.optimizationStatus = document.getElementById('optimization-status').value;
   }
   if (step === 4) {
     state.multicloud = document.querySelector('#multicloud .selected')?.dataset.value;
     state.relationshipQuality = document.getElementById('relationship-quality').value;
-    state.previousNegotiation = document.getElementById('previous-negotiation').value;
     state.migrationPlans = [...document.querySelectorAll('#migration-plans input:checked')].map(i => i.value);
-    state.negotiationGoals = document.getElementById('negotiation-goals').value;
-    state.internalChampion = document.getElementById('internal-champion').value;
     state.awsPrograms = [...document.querySelectorAll('#aws-programs input:checked')].map(i => i.value);
   }
 }
@@ -445,6 +441,11 @@ function discountBreakdownHTML(s, tier, discount) {
   if (s.marketplaceSpend === '500kplus') rows.push(['Significant Marketplace spend — counts toward EDP drawdown', '+2–4%', 'green']);
   else if (s.marketplaceSpend === '100k-500k') rows.push(['Marketplace spend — can be included in EDP commitment', '+1–2%', 'green']);
   if (tier <= 4) rows.push(['Reseller channel discount available (APN partners)', '+5–15%', 'green']);
+  const cur = s.currentDiscounts || [];
+  if (cur.includes('none') || cur.length === 0) rows.push(['Currently at on-demand list pricing — full range available', 'Baseline', 'green']);
+  else if (cur.includes('edp')) rows.push(['Renewing an existing EDP — benchmark against current rate', 'Baseline', 'green']);
+  if ((s.awsPrograms || []).includes('map')) rows.push(['MAP participant — funded credits outside EDP discount', 'Additive', 'green']);
+  if (s.workloadType === 'dev-heavy' || s.workloadType === 'batch') rows.push(['Variable workload profile — commit conservatively', '−2–4%', 'red']);
   if (!rows.length) return '';
   return `<table style="width:100%;margin-top:16px;border-collapse:collapse;font-size:.82rem;">
     <thead><tr style="border-bottom:1px solid var(--border);">
@@ -550,8 +551,9 @@ function buildTactics(s, tier) {
     });
   }
 
-  // Credits
-  if (s.migrationPlans.includes('migrating-to-aws') || s.migrationPlans.includes('onprem-exit')) {
+  // Credits — only pitch MAP entry if they are not already enrolled
+  if ((s.migrationPlans.includes('migrating-to-aws') || s.migrationPlans.includes('onprem-exit'))
+      && !(s.awsPrograms || []).includes('map')) {
     tactics.push({
       title: 'Request Migration Acceleration Program (MAP) Credits',
       desc: 'AWS MAP provides credits to offset migration costs. If you\'re migrating workloads to AWS, you\'re eligible for substantial MAP credits (often $50K–$500K+ depending on scope). These are separate from EDP discounts — always negotiate them as an add-on, not a substitute for discount.',
@@ -619,12 +621,83 @@ function buildTactics(s, tier) {
     });
   }
 
+  // AWS funded programs. MAP entry is pitched above under Credits; this covers
+  // the case where the account is already enrolled.
+  const programs = s.awsPrograms || [];
+  if (programs.includes('map')) {
+    tactics.push({
+      title: 'Confirm How MAP Credits Interact With EDP Drawdown',
+      desc: 'You are already in MAP. Get explicit written confirmation of whether MAP credits offset your EDP commitment drawdown or sit alongside it — the answer materially changes the commitment level you should agree to, and it is frequently left ambiguous in the initial paperwork. If credits do consume drawdown, size your commit net of expected credit, otherwise you will be committing to spend you have already been funded for.',
+      impact: 'high',
+    });
+  }
+  if (programs.includes('isv') || programs.includes('marketplace-seller')) {
+    tactics.push({
+      title: 'Trade Co-Sell Value Against Your Own Pricing',
+      desc: 'As an ISV or Marketplace seller you are on both sides of the AWS relationship, and the revenue you drive through Marketplace is visible to your account team. Make it explicit in the negotiation: your listing, your co-sell pipeline, and your customer-driven consumption are all worth something to AWS. Accounts that generate seller-side revenue routinely leave that value unclaimed on the buyer-side contract.',
+      impact: 'medium',
+    });
+  }
+
   // Reseller channel discount — only available under $5M
   if (tier <= 4) {
     tactics.push({
       title: 'Explore AWS Reseller Channel for Additional Discount Layer',
       desc: 'AWS resellers (APN partners such as CDW, SHI, TD SYNNEX, Carahsoft, and specialist cloud partners) hold their own volume discount agreements with AWS and can pass a portion of that margin to customers as an incremental discount — typically 5–15% on top of standard AWS pricing. Critically, this discount layer is only available through the channel and cannot be unlocked by going direct to AWS. At your spend level (under $5M), a qualified reseller may deliver better net pricing than an EDP alone. Evaluate reseller quotes in parallel with direct AWS negotiations before committing to either route.',
       impact: 'high',
+    });
+  }
+
+  // Current discount posture — where you start from shapes what you ask for
+  const cur = s.currentDiscounts || [];
+  if (cur.includes('none') || cur.length === 0) {
+    tactics.push({
+      title: 'You Are Paying List — Establish a Baseline Before Negotiating',
+      desc: 'No commitment discounts are currently in place, which means every hour of compute is billed at on-demand rates. Before negotiating an EDP, capture the discount available without any negotiation at all: Compute Savings Plans and Reserved Instances are self-service and require no AWS approval. Knowing that floor prevents AWS from presenting standard, self-service savings as a negotiated concession — a common framing when an account has no discount history.',
+      impact: 'high',
+    });
+  } else if (!cur.includes('savings-plans') && !cur.includes('reserved-instances') && tier >= 1) {
+    tactics.push({
+      title: 'Layer Savings Plans Underneath the EDP',
+      desc: 'You hold negotiated discounts but no Savings Plans or Reserved Instances. These stack with an EDP rather than replacing it — the EDP discount applies on top of Savings Plan rates. Model your steady-state baseline and cover it with Compute Savings Plans independently of the EDP negotiation. This is committed discount you can secure without giving AWS anything at the table.',
+      impact: 'high',
+    });
+  }
+  if (cur.includes('edp') && s.edpMonthsRemaining && s.edpMonthsRemaining !== 'na') {
+    tactics.push({
+      title: 'Benchmark Your Renewal Against Your Existing EDP Rate',
+      desc: 'You are renewing an existing EDP rather than negotiating a first one, which means you have the single most useful benchmark available: your current effective discount. Calculate it precisely from actual invoices rather than from the contracted headline rate — the two often differ once service mix is accounted for. Any renewal offer below your current effective rate is a step backwards regardless of how the headline number is presented.',
+      impact: 'high',
+    });
+  }
+
+  // Spend concentration shapes which vehicle actually fits
+  if (s.spendConcentration === 'concentrated') {
+    tactics.push({
+      title: 'Concentrated Spend Favors Service-Specific Commitments',
+      desc: 'With one or two services driving more than 80% of spend, your negotiation should center on those services specifically rather than on a blended rate across the account. Ask for service-level discount terms on your dominant services, and check whether a service-specific commitment or a private pricing addendum beats a general EDP percentage. Concentration also means a single service price change moves your whole bill — request price protection on those services explicitly.',
+      impact: 'medium',
+    });
+  } else if (s.spendConcentration === 'diverse') {
+    tactics.push({
+      title: 'Diversified Spend Argues for a Blended EDP Structure',
+      desc: 'With spend spread thinly across many services, service-specific commitments will not cover enough of your bill to matter. A blended EDP discount applied account-wide is the right vehicle. Push for the broadest possible service inclusion list and explicitly confirm which services are excluded from discount — exclusions are where diversified accounts quietly lose most of the value they thought they negotiated.',
+      impact: 'medium',
+    });
+  }
+
+  // Workload profile drives how much you should commit
+  if (s.workloadType === 'dev-heavy' || s.workloadType === 'batch') {
+    tactics.push({
+      title: 'Size the Commitment to Your Floor, Not Your Average',
+      desc: `Your estate is ${s.workloadType === 'batch' ? 'batch and intermittent' : 'weighted toward dev and test'}, which makes consumption inherently variable. Commit only to the demonstrable floor of the last twelve months, not to the average — AWS will propose the higher number and the shortfall risk is entirely yours. Cover variable capacity above that floor with Spot and on-demand instead of folding it into the commitment. An underconsumed EDP costs more than a smaller one.`,
+      impact: 'high',
+    });
+  } else if (s.workloadType === 'production-only') {
+    tactics.push({
+      title: 'Steady Production Load Supports a Confident Commitment',
+      desc: 'A production-heavy estate has predictable consumption, which is the strongest position from which to commit. Use it: a higher, well-evidenced commitment buys a materially better discount tier, and your shortfall risk is genuinely low. Bring twelve months of consumption data to the table and let it argue for the tier — an account that can evidence its floor negotiates from a different footing than one estimating it.',
+      impact: 'medium',
     });
   }
 
@@ -635,7 +708,15 @@ function buildTactics(s, tier) {
     impact: 'low',
   });
 
-  return tactics.slice(0, 10);
+  // Stable sort by impact before capping. The list is generated in authoring
+  // order, so without this a high-impact tactic added late is silently dropped
+  // by the slice while a low-impact one added early survives.
+  const rank = { high: 0, medium: 1, low: 2 };
+  return tactics
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => (rank[a.t.impact] ?? 1) - (rank[b.t.impact] ?? 1) || a.i - b.i)
+    .map(x => x.t)
+    .slice(0, 12);
 }
 
 function buildTimeline(s) {
