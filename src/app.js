@@ -103,6 +103,7 @@ function collectStep(step) {
     state.useCases = [...document.querySelectorAll('#use-cases .selected')].map(c => c.dataset.value);
     state.workloadType = document.getElementById('workload-type').value;
     state.spendConcentration = document.getElementById('spend-concentration').value;
+    state.gpuUsage = document.getElementById('gpu-usage')?.value || 'none';
     state.optimizationStatus = document.getElementById('optimization-status').value;
   }
   if (step === 4) {
@@ -217,13 +218,17 @@ function getLeverageScore(s) {
   // Tenure (0–5)
   const tenureMap = { '5plus': 5, '3-5': 4, '1-3': 2, 'new': 0 };
   score += tenureMap[s.awsTenure] ?? 2;
-  // Marketplace spend — now counts toward EDP drawdown
+  // Marketplace spend — now counts toward PPA drawdown
   if (s.marketplaceSpend === '500kplus') score += 6;
   else if (s.marketplaceSpend === '100k-500k') score += 3;
   // Database Savings Plans — uncaptured discount lever
   if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') score += 4;
   if (s.databaseSavingsPlans === 'multiple') score += 2;
-  // EDP timing — penalize urgency
+  // Accelerated compute — AWS actively subsidizes AI retention against Azure/GCP.
+  // Net-new GPU capacity decisions carry the most leverage of all.
+  const gpuLeverageMap = { 'evaluating': 5, 'both': 4, 'capacity-blocks': 4, 'ondemand': 2, 'none': 0 };
+  score += gpuLeverageMap[s.gpuUsage] ?? 0;
+  // PPA timing — penalize urgency
   const edpTimingMap = { 'under3': -12, '3-6': -5, '6-12': 6, '12plus': 10, 'na': 0 };
   score += edpTimingMap[s.edpMonthsRemaining] ?? 0;
   return Math.min(Math.round(score), 100);
@@ -420,9 +425,9 @@ function buildStrategyHTML(s) {
 // ─── Section Builders ─────────────────────────────────────────────────────────
 
 function recommendedContractType(s, tier) {
-  if (tier >= 5) return 'EDP / PPA';
-  if (tier >= 3) return 'EDP';
-  if (tier >= 2) return 'EDP or Savings Plans';
+  if (tier >= 5) return 'PPA (multi-year)';
+  if (tier >= 3) return 'PPA';
+  if (tier >= 2) return 'PPA or Savings Plans';
   if (tier >= 1) return 'Savings Plans';
   return 'Savings Plans / On-Demand';
 }
@@ -438,14 +443,16 @@ function discountBreakdownHTML(s, tier, discount) {
   if (s.commitUtilization === 'over100') rows.push(['Exceeded prior commitment (strong signal)', '+1–2%', 'green']);
   if (s.commitUtilization === 'under70') rows.push(['Prior shortfall — expect reduced flexibility', '−2–5%', 'red']);
   if (s.awsTenure === '5plus') rows.push(['Long-tenured customer (loyalty)', '+0–2%', 'green']);
-  if (s.marketplaceSpend === '500kplus') rows.push(['Significant Marketplace spend — counts toward EDP drawdown', '+2–4%', 'green']);
-  else if (s.marketplaceSpend === '100k-500k') rows.push(['Marketplace spend — can be included in EDP commitment', '+1–2%', 'green']);
+  if (s.marketplaceSpend === '500kplus') rows.push(['Significant Marketplace spend — counts toward PPA drawdown', '+2–4%', 'green']);
+  else if (s.marketplaceSpend === '100k-500k') rows.push(['Marketplace spend — can be included in PPA commitment', '+1–2%', 'green']);
   if (tier <= 4) rows.push(['Reseller channel discount available (APN partners)', '+5–15%', 'green']);
   const cur = s.currentDiscounts || [];
   if (cur.includes('none') || cur.length === 0) rows.push(['Currently at on-demand list pricing — full range available', 'Baseline', 'green']);
-  else if (cur.includes('edp')) rows.push(['Renewing an existing EDP — benchmark against current rate', 'Baseline', 'green']);
-  if ((s.awsPrograms || []).includes('map')) rows.push(['MAP participant — funded credits outside EDP discount', 'Additive', 'green']);
+  else if (cur.includes('edp')) rows.push(['Renewing an existing PPA — benchmark against current rate', 'Baseline', 'green']);
+  if ((s.awsPrograms || []).includes('map')) rows.push(['MAP participant — funded credits outside PPA discount', 'Additive', 'green']);
   if (s.workloadType === 'dev-heavy' || s.workloadType === 'batch') rows.push(['Variable workload profile — commit conservatively', '−2–4%', 'red']);
+  if (s.gpuUsage === 'evaluating') rows.push(['Net-new GPU capacity decision — AWS will bid to win it', 'Leverage', 'green']);
+  else if (s.gpuUsage === 'capacity-blocks' || s.gpuUsage === 'both') rows.push(['Committed GPU footprint — strategic AI retention value', 'Leverage', 'green']);
   if (!rows.length) return '';
   return `<table style="width:100%;margin-top:16px;border-collapse:collapse;font-size:.82rem;">
     <thead><tr style="border-bottom:1px solid var(--border);">
@@ -462,25 +469,25 @@ function discountBreakdownHTML(s, tier, discount) {
 function buildTactics(s, tier) {
   const tactics = [];
 
-  // Marketplace as EDP currency
+  // Marketplace as PPA currency
   if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') {
     tactics.push({
       title: 'Negotiate Database Savings Plans as a Separate Workstream',
-      desc: `AWS Database Savings Plans (launched Dec 2025) cover Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream at 12–35% discounts on 1-year no-upfront terms. These are almost never included in AWS\'s initial EDP proposal. Raise them proactively as a separate negotiation item and request they be bundled into your EDP credit package or offered as standalone Plans — either way, this adds material value at no additional commit.`,
+      desc: `AWS Database Savings Plans (launched Dec 2025) cover Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream at 12–35% discounts on 1-year no-upfront terms. These are almost never included in AWS\'s initial PPA proposal. Raise them proactively as a separate negotiation item and request they be bundled into your PPA credit package or offered as standalone Plans — either way, this adds material value at no additional commit.`,
       impact: 'high',
     });
   }
   if (s.edpMonthsRemaining === 'under3' || s.edpMonthsRemaining === '3-6') {
     tactics.push({
       title: 'Request a Short-Term Extension to Reset the Clock',
-      desc: 'With limited time remaining on your EDP, your first action should be requesting a 60–90 day extension of current terms — not signing a new agreement under deadline pressure. AWS will generally grant this, and it shifts the power dynamic back toward you. A negotiation with 6 months of runway achieves meaningfully better outcomes than one with 6 weeks.',
+      desc: 'With limited time remaining on your PPA, your first action should be requesting a 60–90 day extension of current terms — not signing a new agreement under deadline pressure. AWS will generally grant this, and it shifts the power dynamic back toward you. A negotiation with 6 months of runway achieves meaningfully better outcomes than one with 6 weeks.',
       impact: 'high',
     });
   }
   if (s.marketplaceSpend === '500kplus' || s.marketplaceSpend === '100k-500k') {
     tactics.push({
-      title: 'Include AWS Marketplace Spend in Your EDP Commitment',
-      desc: `AWS Marketplace purchases now count toward EDP drawdown — ISV software, managed services, and third-party tools purchased through Marketplace can all be credited against your EDP commitment. With your current Marketplace spend, this meaningfully increases the effective size of your EDP, potentially pushing you into a higher discount tier without increasing AWS infrastructure spend. Explicitly require Marketplace inclusion language in your EDP agreement, as it is not automatic on all contracts.`,
+      title: 'Include AWS Marketplace Spend in Your PPA Commitment',
+      desc: `AWS Marketplace purchases now count toward PPA drawdown — ISV software, managed services, and third-party tools purchased through Marketplace can all be credited against your PPA commitment. With your current Marketplace spend, this meaningfully increases the effective size of your PPA, potentially pushing you into a higher discount tier without increasing AWS infrastructure spend. Explicitly require Marketplace inclusion language in your PPA agreement, as it is not automatic on all contracts.`,
       impact: 'high',
     });
   }
@@ -495,7 +502,7 @@ function buildTactics(s, tier) {
   } else if (s.multicloud === 'multi-cloud' || s.multicloud === 'evaluating') {
     tactics.push({
       title: 'Leverage Your Multi-Cloud Position Explicitly',
-      desc: 'Open negotiations by quantifying what percentage of compute currently runs on Azure/GCP. Frame the EDP negotiation as "the discount required to consolidate more workloads onto AWS." AWS will reward consolidation — make them earn it.',
+      desc: 'Open negotiations by quantifying what percentage of compute currently runs on Azure/GCP. Frame the PPA negotiation as "the discount required to consolidate more workloads onto AWS." AWS will reward consolidation — make them earn it.',
       impact: 'high',
     });
   }
@@ -537,7 +544,7 @@ function buildTactics(s, tier) {
   if (tier >= 4 && (s.supportTier === 'enterprise' || s.supportTier === 'enterprise-on-ramp')) {
     tactics.push({
       title: 'Negotiate Enterprise Support Rate Down from 10% to 7–8%',
-      desc: 'At your spend level, the 10% Enterprise Support rate is negotiable. Request reduction to 7–8% as part of the EDP. This alone saves 2–3% of total spend — equivalent to a significant discount improvement. Push for support rate caps (absolute dollar maximums) to protect against spend growth inflating support costs.',
+      desc: 'At your spend level, the 10% Enterprise Support rate is negotiable. Request reduction to 7–8% as part of the PPA. This alone saves 2–3% of total spend — equivalent to a significant discount improvement. Push for support rate caps (absolute dollar maximums) to protect against spend growth inflating support costs.',
       impact: 'high',
     });
   }
@@ -545,8 +552,8 @@ function buildTactics(s, tier) {
   // Marketplace inclusion
   if (tier >= 3) {
     tactics.push({
-      title: 'Negotiate AWS Marketplace Inclusion in Your EDP Commitment',
-      desc: 'Up to 25% of your EDP commitment can be satisfied through AWS Marketplace purchases (third-party software). This gives you flexibility to use SaaS tools you already buy while burning down your AWS commitment. Negotiate the marketplace inclusion rate upfront — it\'s often left out of first-draft agreements.',
+      title: 'Negotiate AWS Marketplace Inclusion in Your PPA Commitment',
+      desc: 'Up to 25% of your PPA commitment can be satisfied through AWS Marketplace purchases (third-party software). This gives you flexibility to use SaaS tools you already buy while burning down your AWS commitment. Negotiate the marketplace inclusion rate upfront — it\'s often left out of first-draft agreements.',
       impact: 'medium',
     });
   }
@@ -556,7 +563,7 @@ function buildTactics(s, tier) {
       && !(s.awsPrograms || []).includes('map')) {
     tactics.push({
       title: 'Request Migration Acceleration Program (MAP) Credits',
-      desc: 'AWS MAP provides credits to offset migration costs. If you\'re migrating workloads to AWS, you\'re eligible for substantial MAP credits (often $50K–$500K+ depending on scope). These are separate from EDP discounts — always negotiate them as an add-on, not a substitute for discount.',
+      desc: 'AWS MAP provides credits to offset migration costs. If you\'re migrating workloads to AWS, you\'re eligible for substantial MAP credits (often $50K–$500K+ depending on scope). These are separate from PPA discounts — always negotiate them as an add-on, not a substitute for discount.',
       impact: 'high',
     });
   }
@@ -564,7 +571,7 @@ function buildTactics(s, tier) {
   // Bundle accounts
   if (s.companySize === 'enterprise' || s.companySize === 'midmarket') {
     tactics.push({
-      title: 'Consolidate All Linked Accounts Under One EDP',
+      title: 'Consolidate All Linked Accounts Under One PPA',
       desc: 'Aggregate spend from subsidiaries, business units, and dev/test accounts under a single AWS Organizations management account before entering negotiation. Higher aggregated spend unlocks better discount tiers. Many companies leave 10–20% in discount improvement on the table by negotiating siloed accounts.',
       impact: 'medium',
     });
@@ -580,8 +587,8 @@ function buildTactics(s, tier) {
   // Savings plans stacking
   if (tier >= 2) {
     tactics.push({
-      title: 'Stack Compute Savings Plans on Top of EDP',
-      desc: 'EDP discounts and Compute Savings Plans are not mutually exclusive. Compute Savings Plans applied on top of EDP pricing can deliver an additional 20–40% discount on qualifying compute. Negotiate explicit language in your EDP allowing Savings Plans to apply to EDP-discounted rates.',
+      title: 'Stack Compute Savings Plans on Top of PPA',
+      desc: 'PPA discounts and Compute Savings Plans are not mutually exclusive. Compute Savings Plans applied on top of PPA pricing can deliver an additional 20–40% discount on qualifying compute. Negotiate explicit language in your PPA allowing Savings Plans to apply to PPA-discounted rates.',
       impact: 'medium',
     });
   }
@@ -590,7 +597,7 @@ function buildTactics(s, tier) {
   if (tier >= 3) {
     tactics.push({
       title: 'Request Funded Professional Services and Training Credits',
-      desc: 'AWS will often include $25K–$100K in AWS Professional Services time, training credits, and proof-of-concept funding as part of a larger EDP. Ask specifically for: training credits for team certification, funded well-architected reviews, and a dedicated Solutions Architect allocation. These have real dollar value beyond the headline discount.',
+      desc: 'AWS will often include $25K–$100K in AWS Professional Services time, training credits, and proof-of-concept funding as part of a larger PPA. Ask specifically for: training credits for team certification, funded well-architected reviews, and a dedicated Solutions Architect allocation. These have real dollar value beyond the headline discount.',
       impact: 'medium',
     });
   }
@@ -608,15 +615,30 @@ function buildTactics(s, tier) {
   if (s.compliance.includes('fedramp') || s.industry === 'government') {
     tactics.push({
       title: 'Leverage GovCloud / FedRAMP Requirements as Differentiation',
-      desc: 'Your regulatory requirements make you a strategically important customer — AWS GovCloud expertise and compliance investments are a moat for AWS. Use this to request dedicated support resources, accelerated compliance reviews, and enhanced SLAs as part of your EDP. AWS will invest more in retaining FedRAMP-compliant workloads.',
+      desc: 'Your regulatory requirements make you a strategically important customer — AWS GovCloud expertise and compliance investments are a moat for AWS. Use this to request dedicated support resources, accelerated compliance reviews, and enhanced SLAs as part of your PPA. AWS will invest more in retaining FedRAMP-compliant workloads.',
       impact: 'medium',
+    });
+  }
+
+  if (s.gpuUsage === 'capacity-blocks' || s.gpuUsage === 'both') {
+    tactics.push({
+      title: 'Demand Price Protection on Accelerated Compute',
+      desc: 'AWS raised EC2 Capacity Block prices roughly 20% on July 1, 2026 — the second increase that year — across the P6-B300, P6-B200, P5/P5e/P5en, and P4de families. Because your commitment is denominated in dollars rather than in GPU-hours, a list price increase silently reduces the compute your commit buys while still drawing it down on schedule. Two asks follow: size the commit against post-increase rates rather than historical GPU spend, and negotiate explicit price protection or a rate card fixing accelerated-compute pricing for the term. AWS resists blanket price locks but will often fix rates on named instance families where the workload is strategically important.',
+      impact: 'high',
+    });
+  }
+  if (s.gpuUsage === 'evaluating') {
+    tactics.push({
+      title: 'Negotiate GPU Capacity Before the Workload Lands',
+      desc: 'A net-new accelerated-compute decision is the strongest position you will hold in this cycle — AWS is actively defending AI workloads against Azure OpenAI and GCP Vertex, and capacity commitments are the outcome their account teams are measured on. Negotiate the GPU rate card, capacity reservations, and any Bedrock or SageMaker credits before the workload is architected onto AWS, not after. Once the workload is running, the leverage that came from being undecided is gone and the July 2026 Capacity Block increase becomes your baseline rather than your bargaining chip.',
+      impact: 'high',
     });
   }
 
   if (s.useCases.includes('ml-ai') && tier >= 3) {
     tactics.push({
       title: 'Negotiate Bedrock / SageMaker Credits for AI Workloads',
-      desc: 'AI/ML is AWS\'s fastest-growing segment and they actively subsidize adoption. Request dedicated Bedrock and SageMaker credits as part of your EDP — especially if you\'re evaluating or expanding AI use cases. AWS will often provide $50K–$250K in service-specific credits to lock in AI workloads vs. Azure OpenAI or GCP Vertex.',
+      desc: 'AI/ML is AWS\'s fastest-growing segment and they actively subsidize adoption. Request dedicated Bedrock and SageMaker credits as part of your PPA — especially if you\'re evaluating or expanding AI use cases. AWS will often provide $50K–$250K in service-specific credits to lock in AI workloads vs. Azure OpenAI or GCP Vertex.',
       impact: 'medium',
     });
   }
@@ -626,8 +648,8 @@ function buildTactics(s, tier) {
   const programs = s.awsPrograms || [];
   if (programs.includes('map')) {
     tactics.push({
-      title: 'Confirm How MAP Credits Interact With EDP Drawdown',
-      desc: 'You are already in MAP. Get explicit written confirmation of whether MAP credits offset your EDP commitment drawdown or sit alongside it — the answer materially changes the commitment level you should agree to, and it is frequently left ambiguous in the initial paperwork. If credits do consume drawdown, size your commit net of expected credit, otherwise you will be committing to spend you have already been funded for.',
+      title: 'Confirm How MAP Credits Interact With PPA Drawdown',
+      desc: 'You are already in MAP. Get explicit written confirmation of whether MAP credits offset your PPA commitment drawdown or sit alongside it — the answer materially changes the commitment level you should agree to, and it is frequently left ambiguous in the initial paperwork. If credits do consume drawdown, size your commit net of expected credit, otherwise you will be committing to spend you have already been funded for.',
       impact: 'high',
     });
   }
@@ -643,7 +665,7 @@ function buildTactics(s, tier) {
   if (tier <= 4) {
     tactics.push({
       title: 'Explore AWS Reseller Channel for Additional Discount Layer',
-      desc: 'AWS resellers (APN partners such as CDW, SHI, TD SYNNEX, Carahsoft, and specialist cloud partners) hold their own volume discount agreements with AWS and can pass a portion of that margin to customers as an incremental discount — typically 5–15% on top of standard AWS pricing. Critically, this discount layer is only available through the channel and cannot be unlocked by going direct to AWS. At your spend level (under $5M), a qualified reseller may deliver better net pricing than an EDP alone. Evaluate reseller quotes in parallel with direct AWS negotiations before committing to either route.',
+      desc: 'AWS resellers (APN partners such as CDW, SHI, TD SYNNEX, Carahsoft, and specialist cloud partners) hold their own volume discount agreements with AWS and can pass a portion of that margin to customers as an incremental discount — typically 5–15% on top of standard AWS pricing. Critically, this discount layer is only available through the channel and cannot be unlocked by going direct to AWS. At your spend level (under $5M), a qualified reseller may deliver better net pricing than a PPA alone. Evaluate reseller quotes in parallel with direct AWS negotiations before committing to either route.',
       impact: 'high',
     });
   }
@@ -653,20 +675,20 @@ function buildTactics(s, tier) {
   if (cur.includes('none') || cur.length === 0) {
     tactics.push({
       title: 'You Are Paying List — Establish a Baseline Before Negotiating',
-      desc: 'No commitment discounts are currently in place, which means every hour of compute is billed at on-demand rates. Before negotiating an EDP, capture the discount available without any negotiation at all: Compute Savings Plans and Reserved Instances are self-service and require no AWS approval. Knowing that floor prevents AWS from presenting standard, self-service savings as a negotiated concession — a common framing when an account has no discount history.',
+      desc: 'No commitment discounts are currently in place, which means every hour of compute is billed at on-demand rates. Before negotiating a PPA, capture the discount available without any negotiation at all: Compute Savings Plans and Reserved Instances are self-service and require no AWS approval. Knowing that floor prevents AWS from presenting standard, self-service savings as a negotiated concession — a common framing when an account has no discount history.',
       impact: 'high',
     });
   } else if (!cur.includes('savings-plans') && !cur.includes('reserved-instances') && tier >= 1) {
     tactics.push({
-      title: 'Layer Savings Plans Underneath the EDP',
-      desc: 'You hold negotiated discounts but no Savings Plans or Reserved Instances. These stack with an EDP rather than replacing it — the EDP discount applies on top of Savings Plan rates. Model your steady-state baseline and cover it with Compute Savings Plans independently of the EDP negotiation. This is committed discount you can secure without giving AWS anything at the table.',
+      title: 'Layer Savings Plans Underneath the PPA',
+      desc: 'You hold negotiated discounts but no Savings Plans or Reserved Instances. These stack with a PPA rather than replacing it — the PPA discount applies on top of Savings Plan rates. Model your steady-state baseline and cover it with Compute Savings Plans independently of the PPA negotiation. This is committed discount you can secure without giving AWS anything at the table.',
       impact: 'high',
     });
   }
   if (cur.includes('edp') && s.edpMonthsRemaining && s.edpMonthsRemaining !== 'na') {
     tactics.push({
-      title: 'Benchmark Your Renewal Against Your Existing EDP Rate',
-      desc: 'You are renewing an existing EDP rather than negotiating a first one, which means you have the single most useful benchmark available: your current effective discount. Calculate it precisely from actual invoices rather than from the contracted headline rate — the two often differ once service mix is accounted for. Any renewal offer below your current effective rate is a step backwards regardless of how the headline number is presented.',
+      title: 'Benchmark Your Renewal Against Your Existing PPA Rate',
+      desc: 'You are renewing an existing PPA rather than negotiating a first one, which means you have the single most useful benchmark available: your current effective discount. Calculate it precisely from actual invoices rather than from the contracted headline rate — the two often differ once service mix is accounted for. Any renewal offer below your current effective rate is a step backwards regardless of how the headline number is presented.',
       impact: 'high',
     });
   }
@@ -675,13 +697,13 @@ function buildTactics(s, tier) {
   if (s.spendConcentration === 'concentrated') {
     tactics.push({
       title: 'Concentrated Spend Favors Service-Specific Commitments',
-      desc: 'With one or two services driving more than 80% of spend, your negotiation should center on those services specifically rather than on a blended rate across the account. Ask for service-level discount terms on your dominant services, and check whether a service-specific commitment or a private pricing addendum beats a general EDP percentage. Concentration also means a single service price change moves your whole bill — request price protection on those services explicitly.',
+      desc: 'With one or two services driving more than 80% of spend, your negotiation should center on those services specifically rather than on a blended rate across the account. Ask for service-level discount terms on your dominant services, and check whether a service-specific commitment or a private pricing addendum beats a general PPA percentage. Concentration also means a single service price change moves your whole bill — request price protection on those services explicitly.',
       impact: 'medium',
     });
   } else if (s.spendConcentration === 'diverse') {
     tactics.push({
-      title: 'Diversified Spend Argues for a Blended EDP Structure',
-      desc: 'With spend spread thinly across many services, service-specific commitments will not cover enough of your bill to matter. A blended EDP discount applied account-wide is the right vehicle. Push for the broadest possible service inclusion list and explicitly confirm which services are excluded from discount — exclusions are where diversified accounts quietly lose most of the value they thought they negotiated.',
+      title: 'Diversified Spend Argues for a Blended PPA Structure',
+      desc: 'With spend spread thinly across many services, service-specific commitments will not cover enough of your bill to matter. A blended PPA discount applied account-wide is the right vehicle. Push for the broadest possible service inclusion list and explicitly confirm which services are excluded from discount — exclusions are where diversified accounts quietly lose most of the value they thought they negotiated.',
       impact: 'medium',
     });
   }
@@ -690,7 +712,7 @@ function buildTactics(s, tier) {
   if (s.workloadType === 'dev-heavy' || s.workloadType === 'batch') {
     tactics.push({
       title: 'Size the Commitment to Your Floor, Not Your Average',
-      desc: `Your estate is ${s.workloadType === 'batch' ? 'batch and intermittent' : 'weighted toward dev and test'}, which makes consumption inherently variable. Commit only to the demonstrable floor of the last twelve months, not to the average — AWS will propose the higher number and the shortfall risk is entirely yours. Cover variable capacity above that floor with Spot and on-demand instead of folding it into the commitment. An underconsumed EDP costs more than a smaller one.`,
+      desc: `Your estate is ${s.workloadType === 'batch' ? 'batch and intermittent' : 'weighted toward dev and test'}, which makes consumption inherently variable. Commit only to the demonstrable floor of the last twelve months, not to the average — AWS will propose the higher number and the shortfall risk is entirely yours. Cover variable capacity above that floor with Spot and on-demand instead of folding it into the commitment. An underconsumed PPA costs more than a smaller one.`,
       impact: 'high',
     });
   } else if (s.workloadType === 'production-only') {
@@ -704,7 +726,7 @@ function buildTactics(s, tier) {
   // BATNA
   tactics.push({
     title: 'Establish Your BATNA Before the First Meeting',
-    desc: 'Know your Best Alternative To a Negotiated Agreement before talking to AWS. If AWS doesn\'t improve terms: can you extend month-to-month? Convert to pure on-demand + Savings Plans without an EDP? Move a workload to GCP? Having a realistic fallback prevents you from accepting bad terms under pressure. Never negotiate without a credible walk-away.',
+    desc: 'Know your Best Alternative To a Negotiated Agreement before talking to AWS. If AWS doesn\'t improve terms: can you extend month-to-month? Convert to pure on-demand + Savings Plans without a PPA? Move a workload to GCP? Having a realistic fallback prevents you from accepting bad terms under pressure. Never negotiate without a credible walk-away.',
     impact: 'low',
   });
 
@@ -782,7 +804,7 @@ function buildTimeline(s) {
       title: 'Final Close & Contract Review',
       desc: 'Don\'t let urgency lead to signing unfavorable terms. Legal and finance review is non-negotiable.',
       tasks: [
-        'Have legal counsel review PPA/EDP language — especially shortfall and auto-renewal clauses',
+        'Have legal counsel review PPA contract language — especially shortfall and auto-renewal clauses',
         'Confirm all negotiated terms are reflected in the final agreement (not just in emails)',
         'Validate carry-forward, shortfall, and marketplace inclusion language is explicit',
         'Set up post-signing review cadence: quarterly business reviews with your AWS account team',
@@ -834,7 +856,7 @@ function buildConcessions(s, tier) {
   concessions.push({
     icon: '📦',
     title: 'Savings Plans Stacking',
-    desc: 'Explicit language allowing Compute Savings Plans to apply on top of EDP pricing.',
+    desc: 'Explicit language allowing Compute Savings Plans to apply on top of PPA pricing.',
     priority: 'should',
   });
 
@@ -867,6 +889,15 @@ function buildConcessions(s, tier) {
       title: 'Bedrock / SageMaker Credits',
       desc: 'Service-specific AI credits to accelerate ML workload development.',
       priority: 'should',
+    });
+  }
+
+  if (s.gpuUsage && s.gpuUsage !== 'none') {
+    concessions.push({
+      icon: '🎛️',
+      title: 'Accelerated Compute Price Protection',
+      desc: 'A fixed rate card for GPU instance families for the term, following the ~20% Capacity Block increase in July 2026.',
+      priority: s.gpuUsage === 'evaluating' || s.gpuUsage === 'both' ? 'must' : 'should',
     });
   }
 
@@ -942,8 +973,8 @@ function buildRisks(s, tier) {
   if (tier <= 1) {
     risks.push({
       level: 'medium',
-      title: 'Below EDP Threshold',
-      desc: 'Your current spend may fall below the standard $1M EDP minimum. Focus on Savings Plans + Reserved Instances for now. Build a compelling growth story to access EDP.',
+      title: 'Below PPA Threshold',
+      desc: 'Your current spend may fall below the standard $1M PPA minimum. Focus on Savings Plans + Reserved Instances for now. Build a compelling growth story to access PPA.',
     });
   }
 
@@ -971,7 +1002,7 @@ function buildRisks(s, tier) {
     risks.push({
       level: 'low',
       title: 'Compliance-Specific Contract Language',
-      desc: 'Regulatory commitments (HIPAA, FedRAMP) should be explicitly included in BAAs and addenda — ensure these are part of the EDP package, not separate upsells.',
+      desc: 'Regulatory commitments (HIPAA, FedRAMP) should be explicitly included in BAAs and addenda — ensure these are part of the PPA package, not separate upsells.',
     });
   }
 
@@ -980,9 +1011,9 @@ function buildRisks(s, tier) {
 
 function buildQuestions(s, tier) {
   const questions = [
-    'What is the current standard EDP discount for our spend tier, and what would get us to the next tier?',
-    'Can you show us a scenario where our existing Compute Savings Plans stack on top of EDP pricing?',
-    'What percentage of our EDP commitment can be satisfied through AWS Marketplace purchases?',
+    'What is the current standard PPA discount for our spend tier, and what would get us to the next tier?',
+    'Can you show us a scenario where our existing Compute Savings Plans stack on top of PPA pricing?',
+    'What percentage of our PPA commitment can be satisfied through AWS Marketplace purchases?',
   ];
 
   if (tier >= 3) {
@@ -990,12 +1021,23 @@ function buildQuestions(s, tier) {
     questions.push('What funded professional services or MAP credits can be included in this agreement?');
   }
 
+  // Workload-specific asks sit ahead of the generic tail below — the list is
+  // capped at 10, and these are the questions only this client needs to ask.
+  if (s.gpuUsage && s.gpuUsage !== 'none') {
+    questions.push('Capacity Block pricing rose roughly 20% in July 2026 — what price protection can you commit to on GPU instance families for our term, and which families does it cover?');
+    questions.push('If AWS raises accelerated-compute list prices mid-term, does our committed spend simply buy less capacity, or is our drawdown adjusted to compensate?');
+  }
+
+  if (s.useCases.includes('ml-ai')) {
+    questions.push('What service-specific credits or discounts exist for Bedrock and SageMaker as part of a PPA?');
+  }
+
   if (s.migrationPlans.includes('migrating-to-aws')) {
-    questions.push('We\'re planning to migrate X workloads in the next 12 months — how do we qualify for MAP funding, and is it additive to EDP?');
+    questions.push('We\'re planning to migrate X workloads in the next 12 months — how do we qualify for MAP funding, and is it additive to PPA?');
   }
 
   questions.push('What are the exact shortfall mechanics — if we miss our annual commitment, how is the shortfall calculated and billed?');
-  questions.push('How does the carry-forward work — if we underspend in Year 1 of a 3-year EDP, how is the unused amount applied?');
+  questions.push('How does the carry-forward work — if we underspend in Year 1 of a 3-year PPA, how is the unused amount applied?');
 
   if (s.multicloud !== 'aws-only') {
     questions.push('We currently run workloads on Azure/GCP — what discount improvement would you offer if we committed to consolidating those on AWS?');
@@ -1003,10 +1045,6 @@ function buildQuestions(s, tier) {
 
   questions.push('What happens to our discount rate if our spend grows 50% above the committed level — is there an upside ramp?');
   questions.push('Can you show us the full redlined PPA template before we agree to terms verbally?');
-
-  if (s.useCases.includes('ml-ai')) {
-    questions.push('What service-specific credits or discounts exist for Bedrock and SageMaker as part of an EDP?');
-  }
 
   if (tier >= 5) {
     questions.push('What executive sponsorship from AWS leadership is included at our investment level?');
@@ -1017,6 +1055,14 @@ function buildQuestions(s, tier) {
 
 function buildAlerts(s, tier) {
   const alerts = [];
+
+  if (tier >= 2) {
+    alerts.push({
+      type: 'info',
+      icon: '📄',
+      text: '<strong>Terminology: EDP is now called a PPA.</strong> AWS has rebranded the Enterprise Discount Program as the Private Pricing Agreement. The commercial mechanics are unchanged — tiered discounts against a multi-year spend commitment — so older paperwork saying "EDP" and new paperwork saying "PPA" describe the same instrument. This guidance uses PPA throughout. Expect AWS account teams to use the new term, and do not treat a "new PPA structure" framing as a substantive change from the EDP you may already hold.',
+    });
+  }
 
   if (s.renewalTimeline === 'within-1mo') {
     alerts.push({
@@ -1038,7 +1084,7 @@ function buildAlerts(s, tier) {
     alerts.push({
       type: 'warning',
       icon: '⚡',
-      text: '<strong>No Competitive Leverage Detected.</strong> At your spend level, going into an EDP negotiation without a credible competitive alternative significantly reduces your potential discount by 5–10 points. Even requesting Azure/GCP pricing for a small workload before negotiating is worth doing.',
+      text: '<strong>No Competitive Leverage Detected.</strong> At your spend level, going into a PPA negotiation without a credible competitive alternative significantly reduces your potential discount by 5–10 points. Even requesting Azure/GCP pricing for a small workload before negotiating is worth doing.',
     });
   }
 
@@ -1046,7 +1092,7 @@ function buildAlerts(s, tier) {
     alerts.push({
       type: 'info',
       icon: 'ℹ️',
-      text: '<strong>EDP Threshold:</strong> Standard EDP eligibility starts at $1M annual spend. At your current level, focus on Compute Savings Plans and Reserved Instances. However, if you have strong growth projections, AWS may offer an EDP based on committed future spend — especially if you\'re entering a high-growth phase.',
+      text: '<strong>PPA Threshold:</strong> Standard PPA eligibility starts at $1M annual spend. At your current level, focus on Compute Savings Plans and Reserved Instances. However, if you have strong growth projections, AWS may offer a PPA based on committed future spend — especially if you\'re entering a high-growth phase.',
     });
   }
 
@@ -1054,23 +1100,26 @@ function buildAlerts(s, tier) {
     alerts.push({
       type: 'success',
       icon: '🟢',
-      text: '<strong>Reseller Channel Discount Available at Your Spend Level.</strong> At spend under $5M/year, AWS resellers (APN channel partners such as CDW, SHI, TD SYNNEX, and specialist cloud resellers) can unlock incremental discounts — typically 5–15% — that AWS does not offer on direct deals of this size. This discount layer exists because resellers carry their own volume agreements with AWS and pass margin through to the customer. Above $5M, direct EDP terms typically outpace channel pricing. Before committing to a direct renewal, obtain at least one competing reseller quote to benchmark net pricing.',
+      text: '<strong>Reseller Channel Discount Available at Your Spend Level.</strong> At spend under $5M/year, AWS resellers (APN channel partners such as CDW, SHI, TD SYNNEX, and specialist cloud resellers) can unlock incremental discounts — typically 5–15% — that AWS does not offer on direct deals of this size. This discount layer exists because resellers carry their own volume agreements with AWS and pass margin through to the customer. Above $5M, direct PPA terms typically outpace channel pricing. Before committing to a direct renewal, obtain at least one competing reseller quote to benchmark net pricing.',
     });
   }
   if (s.edpMonthsRemaining === 'under3') {
-    alerts.push({ type: 'danger', icon: '🚨', text: '<strong>EDP Expiring in Under 3 Months.</strong> You are in the weakest possible negotiating position — AWS knows you must renew. Immediately request a short-term 90-day extension at current rates while negotiating the new EDP. Do not let the contract lapse; AWS will reset pricing to on-demand rates.' });
+    alerts.push({ type: 'danger', icon: '🚨', text: '<strong>PPA Expiring in Under 3 Months.</strong> You are in the weakest possible negotiating position — AWS knows you must renew. Immediately request a short-term 90-day extension at current rates while negotiating the new PPA. Do not let the contract lapse; AWS will reset pricing to on-demand rates.' });
   } else if (s.edpMonthsRemaining === '3-6') {
-    alerts.push({ type: 'warning', icon: '⚠️', text: '<strong>Limited EDP Negotiation Window.</strong> With 3–6 months remaining, your leverage window is narrowing. Begin formal EDP discussions now. AWS\'s first offer at this stage tends to be below what is achievable with a 9-month runway — push back on the first proposal.' });
+    alerts.push({ type: 'warning', icon: '⚠️', text: '<strong>Limited PPA Negotiation Window.</strong> With 3–6 months remaining, your leverage window is narrowing. Begin formal PPA discussions now. AWS\'s first offer at this stage tends to be below what is achievable with a 9-month runway — push back on the first proposal.' });
+  }
+  if (s.gpuUsage === 'capacity-blocks' || s.gpuUsage === 'both') {
+    alerts.push({ type: 'warning', icon: '🎛️', text: '<strong>GPU Capacity Block Prices Rose ~20% on July 1, 2026.</strong> This was the second increase that year, covering the P6-B300, P6-B200, P5/P5e/P5en, and P4de families. All other EC2 pricing was unchanged. Two consequences for this negotiation: a commit sized on pre-July GPU spend understates what that same capacity now costs, and a dollar-denominated commitment buys less accelerated compute than it did last cycle while still drawing down at the same rate. Size against current rates, and ask for accelerated-compute price protection explicitly — it will not be offered.' });
   }
   if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') {
-    alerts.push({ type: 'success', icon: '🟢', text: '<strong>Database Savings Plans Opportunity Detected.</strong> AWS launched Database Savings Plans in December 2025 — 12–35% discounts on Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream on 1-year no-upfront terms. These are almost never included in AWS\'s EDP proposal. Raise this as a separate workstream in your negotiation and request they be included in your EDP credit package.' });
+    alerts.push({ type: 'success', icon: '🟢', text: '<strong>Database Savings Plans Opportunity Detected.</strong> AWS launched Database Savings Plans in December 2025 — 12–35% discounts on Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream on 1-year no-upfront terms. These are almost never included in AWS\'s PPA proposal. Raise this as a separate workstream in your negotiation and request they be included in your PPA credit package.' });
   }
 
   if (s.contractType === 'on-demand' && tier >= 2) {
     alerts.push({
       type: 'warning',
       icon: '💸',
-      text: '<strong>Significant Savings Opportunity Missed.</strong> You\'re currently on On-Demand pricing at a spend level where structured discounts (Savings Plans or EDP) would deliver 10–30% savings. This is a high-priority negotiation.',
+      text: '<strong>Significant Savings Opportunity Missed.</strong> You\'re currently on On-Demand pricing at a spend level where structured discounts (Savings Plans or PPA) would deliver 10–30% savings. This is a high-priority negotiation.',
     });
   }
 
@@ -1078,7 +1127,7 @@ function buildAlerts(s, tier) {
     alerts.push({
       type: 'info',
       icon: '🔧',
-      text: '<strong>Optimize Before You Commit.</strong> AWS Compute Optimizer typically identifies 20–35% cost reduction in unoptimized environments. Completing this before your EDP negotiation lowers your commit baseline and reduces the risk of over-committing to inflated spend.',
+      text: '<strong>Optimize Before You Commit.</strong> AWS Compute Optimizer typically identifies 20–35% cost reduction in unoptimized environments. Completing this before your PPA negotiation lowers your commit baseline and reduces the risk of over-committing to inflated spend.',
     });
   }
 
@@ -1095,17 +1144,17 @@ function buildCommitStructureHTML(s, tier) {
       </div>
       <div class="section-content">
         <div class="alert alert-info"><span class="alert-icon">ℹ️</span>
-          <div>At your current spend level, the most cost-effective approach is <strong>Compute Savings Plans</strong> (1-year or 3-year, no upfront or partial upfront). These deliver 20–66% off On-Demand rates with no minimum commitment requirement and apply automatically across EC2, Fargate, and Lambda. Once your spend exceeds $500K–$1M, initiate EDP conversations with your AWS account team proactively.</div>
+          <div>At your current spend level, the most cost-effective approach is <strong>Compute Savings Plans</strong> (1-year or 3-year, no upfront or partial upfront). These deliver 20–66% off On-Demand rates with no minimum commitment requirement and apply automatically across EC2, Fargate, and Lambda. Once your spend exceeds $500K–$1M, initiate PPA conversations with your AWS account team proactively.</div>
         </div>
       </div>
     </div>`;
   }
 
   const termAdvice = s.desiredTerm === '3yr'
-    ? '3-year EDP — offers deepest discount but highest commitment risk. Negotiate annual ramp and carry-forward.'
+    ? '3-year PPA — offers deepest discount but highest commitment risk. Negotiate annual ramp and carry-forward.'
     : s.desiredTerm === '2yr'
-    ? '2-year EDP — good balance of discount depth and flexibility. Most commonly signed at $2M–$5M spend.'
-    : '1-year EDP (first cycle) — prove the relationship, then extend to 3 years at renewal with better terms.';
+    ? '2-year PPA — good balance of discount depth and flexibility. Most commonly signed at $2M–$5M spend.'
+    : '1-year PPA (first cycle) — prove the relationship, then extend to 3 years at renewal with better terms.';
 
   return `
   <div class="strategy-section">
@@ -1128,19 +1177,19 @@ function buildCommitStructureHTML(s, tier) {
         </thead>
         <tbody>
           <tr style="border-bottom:1px solid var(--surface-3);">
-            <td style="padding:9px 8px;font-weight:600;">1-Year EDP</td>
+            <td style="padding:9px 8px;font-weight:600;">1-Year PPA</td>
             <td style="padding:9px 8px;text-align:center;">★★★☆☆</td>
             <td style="padding:9px 8px;text-align:center;">★★★★☆</td>
-            <td style="padding:9px 8px;color:var(--text-secondary);">First EDP, uncertain growth</td>
+            <td style="padding:9px 8px;color:var(--text-secondary);">First PPA, uncertain growth</td>
           </tr>
           <tr style="border-bottom:1px solid var(--surface-3);">
-            <td style="padding:9px 8px;font-weight:600;">3-Year EDP</td>
+            <td style="padding:9px 8px;font-weight:600;">3-Year PPA</td>
             <td style="padding:9px 8px;text-align:center;">★★★★★</td>
             <td style="padding:9px 8px;text-align:center;">★★☆☆☆</td>
             <td style="padding:9px 8px;color:var(--text-secondary);">Stable workloads, predictable growth</td>
           </tr>
           <tr style="border-bottom:1px solid var(--surface-3);">
-            <td style="padding:9px 8px;font-weight:600;">EDP + Savings Plans Stack</td>
+            <td style="padding:9px 8px;font-weight:600;">PPA + Savings Plans Stack</td>
             <td style="padding:9px 8px;text-align:center;">★★★★★</td>
             <td style="padding:9px 8px;text-align:center;">★★★☆☆</td>
             <td style="padding:9px 8px;color:var(--text-secondary);">Heavy compute, EC2-dominant spend</td>

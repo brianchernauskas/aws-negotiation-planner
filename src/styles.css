@@ -178,6 +178,7 @@ body {
 .form-grid { display: flex; flex-direction: column; gap: 20px; }
 
 .form-group { display: flex; flex-direction: column; gap: 8px; }
+.field-hint { font-size: .78rem; color: var(--text-secondary); line-height: 1.5; margin-top: -2px; }
 
 .form-row-2 {
   display: grid;

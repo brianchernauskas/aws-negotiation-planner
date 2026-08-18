@@ -135,8 +135,7 @@
                 <option value="on-demand">On-Demand only</option>
                 <option value="savings-plans">Savings Plans</option>
                 <option value="reserved">Reserved Instances</option>
-                <option value="edp">Enterprise Discount Program (EDP)</option>
-                <option value="ppa">Private Pricing Agreement (PPA)</option>
+                <option value="ppa">Private Pricing Agreement (PPA / formerly EDP)</option>
                 <option value="mixed">Mixed / Multiple</option>
               </select>
             </div>
@@ -243,10 +242,10 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="edp-months-remaining">Months Until EDP Expiry</label>
+            <label for="edp-months-remaining">Months Until PPA / EDP Expiry</label>
             <select id="edp-months-remaining">
               <option value="">Select…</option>
-              <option value="na">No EDP / not applicable</option>
+              <option value="na">No PPA or EDP / not applicable</option>
               <option value="under3">Under 3 months (critical)</option>
               <option value="3-6">3–6 months (limited leverage)</option>
               <option value="6-12">6–12 months (good window)</option>
@@ -268,7 +267,7 @@
           <div class="form-group">
             <label>What discounts do you currently receive? (Select all that apply)</label>
             <div class="checkbox-group">
-              <label class="checkbox-item"><input type="checkbox" value="edp-discount" class="current-discounts" /> EDP discount (&gt;5%)</label>
+              <label class="checkbox-item"><input type="checkbox" value="edp-discount" class="current-discounts" /> PPA / EDP discount (&gt;5%)</label>
               <label class="checkbox-item"><input type="checkbox" value="savings-plans" class="current-discounts" /> Compute Savings Plans</label>
               <label class="checkbox-item"><input type="checkbox" value="reserved-instances" class="current-discounts" /> Reserved Instances</label>
               <label class="checkbox-item"><input type="checkbox" value="support-discount" class="current-discounts" /> Negotiated support pricing</label>
@@ -376,6 +375,19 @@
                 <option value="diverse">Diversified (many services, &lt;30% each)</option>
               </select>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label for="gpu-usage">Accelerated Compute (GPU) Usage</label>
+            <select id="gpu-usage">
+              <option value="">Select…</option>
+              <option value="none">None / no GPU workloads</option>
+              <option value="ondemand">GPU instances via On-Demand or Savings Plans</option>
+              <option value="capacity-blocks">EC2 Capacity Blocks for ML</option>
+              <option value="both">Capacity Blocks plus On-Demand / Reserved GPU</option>
+              <option value="evaluating">Evaluating GPU capacity for new AI workloads</option>
+            </select>
+            <p class="field-hint">AWS raised Capacity Block prices ~20% on July 1, 2026 — the second increase that year. This affects commit sizing and price-protection asks.</p>
           </div>
 
           <div class="form-group">
