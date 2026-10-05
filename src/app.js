@@ -1126,6 +1126,9 @@ function buildAlerts(s, tier) {
   if (s.gpuUsage === 'capacity-blocks' || s.gpuUsage === 'both') {
     alerts.push({ type: 'warning', icon: '🎛️', text: '<strong>GPU Capacity Block Prices Rose ~20% on July 1, 2026.</strong> This was the second increase that year, covering the P6-B300, P6-B200, P5/P5e/P5en, and P4de families. All other EC2 pricing was unchanged. Two consequences for this negotiation: a commit sized on pre-July GPU spend understates what that same capacity now costs, and a dollar-denominated commitment buys less accelerated compute than it did last cycle while still drawing down at the same rate. Size against current rates, and ask for accelerated-compute price protection explicitly — it will not be offered.' });
   }
+  if (s.gpuUsage === 'capacity-blocks' || s.gpuUsage === 'both') {
+    alerts.push({ type: 'warning', icon: '📈', text: '<strong>Capacity Block Rates Reset Again on October 7, 2026.</strong> AWS\'s pricing page lists new per-accelerator rates effective October 7 (P6-B300 $16.146, P6-B200 $14.208, P5 $5.970 in US regions), roughly 15% above the July levels by our calculation, and says reservation prices are updated regularly with supply and demand. Treat Capacity Blocks as a variable-price product: size any commitment against current rates, not the July figures, and ask for a fixed rate card on the named GPU families you actually run for the term of the PPA.' });
+  }
   if (s.databaseSavingsPlans && s.databaseSavingsPlans !== 'none') {
     alerts.push({ type: 'success', icon: '🟢', text: '<strong>Database Savings Plans Opportunity Detected.</strong> AWS launched Database Savings Plans in December 2025 — 12–35% discounts on Aurora Serverless, DocumentDB, Neptune, Keyspaces, and Timestream on 1-year no-upfront terms. These are almost never included in AWS\'s PPA proposal. Raise this as a separate workstream in your negotiation and request they be included in your PPA credit package.' });
   }
